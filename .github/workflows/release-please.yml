@@ -15,3 +15,37 @@ jobs:
     uses: dryvist/.github/.github/workflows/_release-please.yml@main
     secrets:
       GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY: ${{ secrets.GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY }}
+
+  # Releases are immutable once published, so release-please creates a draft
+  # (release-please-config.json) and the nginx config tarball plus its sha256
+  # are attached here before publishing. The wall role downloads both.
+  assets:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - id: tag
+        run: echo "tag=v$(cat VERSION)" >> "$GITHUB_OUTPUT"
+      - run: tar -czf homelab-wall-feed-nginx.tar.gz -C nginx .
+      - run: sha256sum homelab-wall-feed-nginx.tar.gz > homelab-wall-feed-nginx.tar.gz.sha256
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: gh release upload "$TAG" homelab-wall-feed-nginx.tar.gz homelab-wall-feed-nginx.tar.gz.sha256 --clobber
+
+  publish:
+    needs: assets
+    uses: dryvist/.github/.github/workflows/_publish-draft-release.yml@main
+    with:
+      tag: ${{ needs.assets.outputs.tag }}
+      latest: true
+    secrets:
+      GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
