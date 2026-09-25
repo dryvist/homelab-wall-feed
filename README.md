@@ -18,7 +18,8 @@ reaches a backend. Responses carry `Cache-Control: no-store`, and backend
 
 ## Installation
 
-Put both files from `nginx/` in the nginx config directory (so the relative
+Each release attaches `homelab-wall-feed-nginx.tar.gz` and its `.sha256`.
+Put both files from it in the nginx config directory (so the relative
 `include wall-feed-proxy.conf` resolves). Then define the upstream and include
 the gateway in the wall's server block:
 
