@@ -36,10 +36,12 @@ jobs:
         run: echo "tag=v$(cat VERSION)" >> "$GITHUB_OUTPUT"
       - run: tar -czf homelab-wall-feed-nginx.tar.gz -C nginx .
       - run: sha256sum homelab-wall-feed-nginx.tar.gz > homelab-wall-feed-nginx.tar.gz.sha256
+      - run: tar -czf homelab-wall-feed-publisher.tar.gz -C publisher .
+      - run: sha256sum homelab-wall-feed-publisher.tar.gz > homelab-wall-feed-publisher.tar.gz.sha256
       - env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.tag.outputs.tag }}
-        run: gh release upload "$TAG" homelab-wall-feed-nginx.tar.gz homelab-wall-feed-nginx.tar.gz.sha256 --clobber
+        run: gh release upload "$TAG" homelab-wall-feed-nginx.tar.gz homelab-wall-feed-nginx.tar.gz.sha256 homelab-wall-feed-publisher.tar.gz homelab-wall-feed-publisher.tar.gz.sha256 --clobber
 
   publish:
     needs: assets

@@ -24,3 +24,13 @@ jobs:
       - run: sudo apt-get update -q
       - run: sudo apt-get install -y --no-install-recommends nginx-light
       - run: python3 -W error::ResourceWarning tests/test_gateway.py -v
+
+  publisher:
+    name: Publisher
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - run: python3 -W error::ResourceWarning tests/test_publisher.py -v
