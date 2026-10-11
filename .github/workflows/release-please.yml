@@ -12,7 +12,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    uses: dryvist/.github/.github/workflows/_release-please.yml@0aab1ddaecacea5dc9752b075e2ac10491af33bf # v1.11.3
+    uses: dryvist/.github/.github/workflows/_release-please.yml@f9e8814ad8f82e4bc8cdaac73ee49b1ffa6d4cf2 # v1.12.1
     secrets:
       GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY: ${{ secrets.GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY }}
 
@@ -43,7 +43,7 @@ jobs:
 
   publish:
     needs: assets
-    uses: dryvist/.github/.github/workflows/_publish-draft-release.yml@0aab1ddaecacea5dc9752b075e2ac10491af33bf # v1.11.3
+    uses: dryvist/.github/.github/workflows/_publish-draft-release.yml@f9e8814ad8f82e4bc8cdaac73ee49b1ffa6d4cf2 # v1.12.1
     with:
       tag: ${{ needs.assets.outputs.tag }}
       latest: true
