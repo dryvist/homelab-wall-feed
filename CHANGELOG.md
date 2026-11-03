@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.0](https://github.com/dryvist/homelab-wall-feed/compare/v0.2.1...v0.3.0) (2026-11-03)
+
+
+### Features
+
+* **agent:** zcode run j-079bb2cb36288285 ([3023c86](https://github.com/dryvist/homelab-wall-feed/commit/3023c86624bec1a9b51e90364458f38fa0934c6b))
+* proxy /api/words and /api/llm/recent to a ClickHouse upstream ([7671149](https://github.com/dryvist/homelab-wall-feed/commit/7671149de4bac4c460f37600cc3550ec81319e58))
+* proxy /api/words and /api/llm/recent to ClickHouse ([#24](https://github.com/dryvist/homelab-wall-feed/issues/24)) ([39507e1](https://github.com/dryvist/homelab-wall-feed/commit/39507e126e96e3c69413e28ec3192008bbb8e492))
+
 ## [0.2.1](https://github.com/dryvist/homelab-wall-feed/compare/v0.2.0...v0.2.1) (2026-09-25)
 
 
