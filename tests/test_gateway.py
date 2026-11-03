@@ -1,5 +1,6 @@
-"""Runs nginx with the gateway config in front of a stub Prometheus and checks
-what gets through. Needs `nginx` on PATH; stdlib only otherwise."""
+"""Runs nginx with the gateway config in front of one stub that stands in for
+both backends (Prometheus and ClickHouse) and checks what gets through. Needs
+`nginx` on PATH; stdlib only otherwise."""
 
 import http.server
 import json
@@ -16,6 +17,10 @@ import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
+# Stand-ins for the deployer-supplied wall-feed-clickhouse-auth.conf.
+CLICKHOUSE_USER = "wall_reader"
+CLICKHOUSE_KEY = "stub-key"
+
 
 def free_port() -> int:
     with socket.socket() as s:
@@ -31,6 +36,8 @@ class Stub(http.server.BaseHTTPRequestHandler):
             "path": self.path,
             "cookie": self.headers.get("Cookie"),
             "authorization": self.headers.get("Authorization"),
+            "clickhouse_user": self.headers.get("X-ClickHouse-User"),
+            "clickhouse_key": self.headers.get("X-ClickHouse-Key"),
         }).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -54,6 +61,9 @@ class GatewayTest(unittest.TestCase):
         cls.tmp = pathlib.Path(tempfile.mkdtemp())
         for f in (ROOT / "nginx").glob("*.conf"):
             shutil.copy(f, cls.tmp / f.name)
+        (cls.tmp / "wall-feed-clickhouse-auth.conf").write_text(
+            f"proxy_set_header X-ClickHouse-User {CLICKHOUSE_USER};\n"
+            f"proxy_set_header X-ClickHouse-Key {CLICKHOUSE_KEY};\n")
         cls.port = free_port()
         (cls.tmp / "nginx.conf").write_text(f"""
 daemon off;
@@ -65,6 +75,7 @@ http {{
   client_body_temp_path {cls.tmp}; proxy_temp_path {cls.tmp};
   fastcgi_temp_path {cls.tmp}; uwsgi_temp_path {cls.tmp}; scgi_temp_path {cls.tmp};
   upstream prometheus {{ server 127.0.0.1:{cls.stub.server_address[1]}; }}
+  upstream clickhouse {{ server 127.0.0.1:{cls.stub.server_address[1]}; }}
   server {{
     listen 127.0.0.1:{cls.port};
     include {cls.tmp}/wall-feed.conf;
@@ -112,18 +123,62 @@ http {{
         self.assertEqual(status, 200)
         self.assertEqual(body["path"], "/api/v1/query_range?query=up&start=1&end=2&step=15")
 
+    def test_words_forwards_with_clickhouse_auth(self):
+        status, headers, body = self.call("/api/words")
+        self.assertEqual(status, 200)
+        self.assertEqual(body["path"], "/wall/words")
+        self.assertEqual(body["clickhouse_user"], CLICKHOUSE_USER)
+        self.assertEqual(body["clickhouse_key"], CLICKHOUSE_KEY)
+        self.assertEqual(headers.get("Cache-Control"), "no-store")
+        self.assertNotIn("Set-Cookie", headers)
+
+    def test_llm_recent_forwards_with_clickhouse_auth(self):
+        status, _, body = self.call("/api/llm/recent")
+        self.assertEqual(status, 200)
+        self.assertEqual(body["path"], "/wall/recent")
+        self.assertEqual(body["clickhouse_user"], CLICKHOUSE_USER)
+        self.assertEqual(body["clickhouse_key"], CLICKHOUSE_KEY)
+
+    def test_clickhouse_routes_drop_the_client_query_string(self):
+        # ClickHouse accepts settings and queries as URL parameters, so none
+        # of the client's args may reach it.
+        for path, upstream_path in (("/api/words?query=SELECT%201&readonly=0", "/wall/words"),
+                                    ("/api/llm/recent?query=SELECT%201&readonly=0", "/wall/recent")):
+            with self.subTest(path=path):
+                status, _, body = self.call(path)
+                self.assertEqual(status, 200)
+                self.assertEqual(body["path"], upstream_path)
+
+    def test_prometheus_routes_carry_no_clickhouse_auth(self):
+        for path in ("/api/prom/query?query=up",
+                     "/api/prom/query_range?query=up&start=1&end=2&step=15"):
+            with self.subTest(path=path):
+                _, _, body = self.call(path)
+                self.assertIsNone(body["clickhouse_user"])
+                self.assertIsNone(body["clickhouse_key"])
+
     def test_browser_credentials_are_stripped(self):
-        _, _, body = self.call("/api/prom/query?query=up",
-                               headers={"Cookie": "authelia_session=s", "Authorization": "Bearer t"})
-        self.assertIsNone(body["cookie"])
-        self.assertIsNone(body["authorization"])
+        for path in ("/api/prom/query?query=up", "/api/words", "/api/llm/recent"):
+            with self.subTest(path=path):
+                _, _, body = self.call(path, headers={"Cookie": "authelia_session=s",
+                                                      "Authorization": "Bearer t"})
+                self.assertIsNone(body["cookie"])
+                self.assertIsNone(body["authorization"])
 
     def test_post_is_refused(self):
-        self.assertEqual(self.call("/api/prom/query", method="POST")[0], 403)
+        for path in ("/api/prom/query", "/api/prom/query_range", "/api/words", "/api/llm/recent"):
+            with self.subTest(path=path):
+                self.assertEqual(self.call(path, method="POST")[0], 403)
 
     def test_other_prometheus_apis_are_not_exposed(self):
         for path in ("/api/v1/query?query=up", "/api/prom/admin/tsdb/snapshot",
                      "/api/prom/series?match[]=up", "/api/prom/query/../targets"):
+            with self.subTest(path=path):
+                self.assertEqual(self.call(path)[0], 404)
+
+    def test_other_clickhouse_paths_are_not_exposed(self):
+        for path in ("/api/x", "/api/words/", "/api/llm", "/api/llm/recent/",
+                     "/api/wall/words", "/api/llm/recent/../words"):
             with self.subTest(path=path):
                 self.assertEqual(self.call(path)[0], 404)
 
