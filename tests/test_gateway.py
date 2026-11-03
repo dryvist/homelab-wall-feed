@@ -139,6 +139,16 @@ http {{
         self.assertEqual(body["clickhouse_user"], CLICKHOUSE_USER)
         self.assertEqual(body["clickhouse_key"], CLICKHOUSE_KEY)
 
+    def test_clickhouse_routes_drop_the_client_query_string(self):
+        # ClickHouse accepts settings and queries as URL parameters, so none
+        # of the client's args may reach it.
+        for path, upstream_path in (("/api/words?query=SELECT%201&readonly=0", "/wall/words"),
+                                    ("/api/llm/recent?query=SELECT%201&readonly=0", "/wall/recent")):
+            with self.subTest(path=path):
+                status, _, body = self.call(path)
+                self.assertEqual(status, 200)
+                self.assertEqual(body["path"], upstream_path)
+
     def test_prometheus_routes_carry_no_clickhouse_auth(self):
         for path in ("/api/prom/query?query=up",
                      "/api/prom/query_range?query=up&start=1&end=2&step=15"):
